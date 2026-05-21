@@ -53,14 +53,6 @@ The course builds toward a single coherent goal: producing pixel-level land cove
 CNN_projects/
 ├── README.md
 ├── pyproject.toml              ← uv project config
-├── environment.yml             ← conda environment
-├── requirements.txt            ← pip requirements
-│
-├── docs/
-│   ├── course_design.md        ← Parts 1-3: candidate analysis + backbone selection
-│   ├── infrastructure.md       ← Part 5: environment, stack, repo guide
-│   ├── capstone.md             ← Part 6: capstone brief + rubric
-│   └── resources.md            ← Part 7: papers, tools, advanced topics
 │
 ├── src/
 │   └── eo_cnn/
@@ -99,26 +91,12 @@ CNN_projects/
 
 ## Quick Start
 
-### Option A: uv (recommended)
-
 ```bash
 git clone <repo>
 cd CNN_projects
 uv sync
 uv run jupyter lab
 ```
-
-### Option B: conda
-
-```bash
-conda env create -f environment.yml
-conda activate eo-cnn
-jupyter lab
-```
-
-### Option C: Google Colab
-
-Each notebook contains a `# COLAB SETUP` cell at the top that installs all required packages and mounts Google Drive. Open any notebook directly in Colab.
 
 ---
 
