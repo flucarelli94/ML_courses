@@ -89,6 +89,40 @@ CNN_projects/
 
 ---
 
+## The `eo_cnn` Package
+
+`src/eo_cnn/` is the course's **reference implementation** — a small, clean, importable Python library that mirrors (in production-quality form) the concepts the notebooks teach step by step. The teaching notebooks are deliberately self-contained (each re-implements what it needs so it runs standalone on Colab), so this package is meant as the polished, reusable counterpart: the "what good code looks like" version you can read after working through a chapter, import into your own projects, or extend in the capstone.
+
+Everything is plain PyTorch + NumPy with explicit, heavily-documented code (no heavy framework abstractions), and heavy dependencies (`torchgeo`, `rasterio`, `segmentation-models-pytorch`, `albumentations`) are imported lazily inside functions so the package stays light to import.
+
+```python
+from eo_cnn.data import EuroSATDataModule
+from eo_cnn.models import SimpleCNN, EuroSATClassifier, UNet
+from eo_cnn.training import ClassificationTrainer, EarlyStopping
+from eo_cnn.visualization import plot_training_history
+```
+
+### `eo_cnn.data` — datasets, preprocessing, augmentation
+- **`eurosat.py`** — `EuroSATDataModule` (torchgeo-backed train/val/test `DataLoader`s with sensible defaults), `get_eurosat_splits` (random splits for full transform control), plus the EuroSAT class list and precomputed per-channel RGB/multispectral normalization statistics.
+- **`sentinel2.py`** — `Sentinel2Tile` for loading Level-2A multi-band GeoTIFFs (rasterio), computing spectral indices (NDVI, NDWI, NDBI, EVI), percentile/global normalization and true-colour rendering; plus `tile_scene` / `reconstruct_from_tiles` for sliding-window inference over full scenes with Gaussian blending.
+- **`transforms.py`** — albumentations pipelines for classification and segmentation, including EO-aware variants (label-safe geometric augments, per-band handling, multispectral-only pipeline).
+
+### `eo_cnn.models` — architectures
+- **`simple_cnn.py`** — teaching models built from a transparent `ConvBlock`: `SimpleCNN` (3-block EuroSAT classifier), `DeepCNN` (depth ablation), `CNNWithGAP` (global average pooling + class activation maps), plus `count_parameters` and `receptive_field_size` helpers.
+- **`resnet.py`** — `EuroSATClassifier` (ResNet18/50 & EfficientNet-B0 backbones with scratch / finetune / frozen-feature modes and multispectral first-conv adaptation), the `build_resnet_classifier` factory, and `ProgressiveFinetuner` for staged unfreezing.
+- **`unet.py`** — a from-scratch, fully-annotated `UNet` (with `DoubleConv` / `Down` / `Up` / `OutConv` blocks and skip connections) and `build_smp_unet` for production U-Nets with pretrained encoders via `segmentation-models-pytorch`.
+
+### `eo_cnn.training` — training loops & metrics
+- **`trainer.py`** — explicit, readable `ClassificationTrainer` and `SegmentationTrainer` (gradient clipping, schedulers, checkpointing, mixed-precision for segmentation), plus `TrainingHistory` and `EarlyStopping`.
+- **`metrics.py`** — segmentation/classification metrics: per-class IoU, mIoU, Dice, pixel accuracy, confusion matrix, and a `classification_report_eo` summary.
+
+### `eo_cnn.visualization` — plotting
+- **`plots.py`** — Jupyter-ready figures: image-batch grids, segmentation prediction triplets (RGB | GT | pred), training curves, confusion matrices, class distributions, augmentation previews, CNN feature-map grids, and full-scene land-cover maps with legends (includes default EuroSAT and LoveDA palettes).
+
+> **Note:** the chapter notebooks currently do not import from `eo_cnn` — they reimplement each concept inline so they stay runnable in isolation. Treat `eo_cnn` as the clean reference/library version of the same material, ideal for the capstone and your own projects.
+
+---
+
 ## Quick Start
 
 ```bash
