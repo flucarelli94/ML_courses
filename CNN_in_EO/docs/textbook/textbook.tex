@@ -1,0 +1,331 @@
+%==============================================================================
+%  Convolutional Neural Networks for Earth Observation
+%  A Student Reference Textbook
+%==============================================================================
+\documentclass[11pt,openany]{book}
+
+\usepackage[a4paper,margin=2.4cm,headheight=14pt]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{mathtools}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{array}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{enumitem}
+\usepackage{tikz}
+\usetikzlibrary{positioning,arrows.meta,calc,fit,backgrounds,shapes.geometric}
+\usepackage[most]{tcolorbox}
+\usepackage{listings}
+\usepackage{seqsplit}
+\usepackage{fancyhdr}
+\usepackage{titlesec}
+\usepackage[hidelinks,colorlinks=true,linkcolor=eoblue,citecolor=eogreen,urlcolor=eoblue]{hyperref}
+
+%------------------------------------------------------------------ colours
+\definecolor{eoblue}{HTML}{1E56C8}
+\definecolor{eogreen}{HTML}{1A7A1A}
+\definecolor{eoearth}{HTML}{A0754A}
+\definecolor{eored}{HTML}{E30B0B}
+\definecolor{eodark}{HTML}{1F2A44}
+\definecolor{codebg}{HTML}{F5F6F8}
+\definecolor{codekw}{HTML}{0B5394}
+\definecolor{codestr}{HTML}{1A7A1A}
+\definecolor{codecom}{HTML}{7A7A7A}
+\definecolor{lightgray}{HTML}{ECEFF3}
+
+%------------------------------------------------------------------ headers
+\pagestyle{fancy}
+\fancyhf{}
+\renewcommand{\headrulewidth}{0.4pt}
+\fancyhead[LE]{\small\nouppercase{\leftmark}}
+\fancyhead[RO]{\small\nouppercase{\rightmark}}
+\fancyfoot[C]{\thepage}
+\fancypagestyle{plain}{\fancyhf{}\fancyfoot[C]{\thepage}\renewcommand{\headrulewidth}{0pt}}
+
+%------------------------------------------------------------------ chapter title format
+\titleformat{\chapter}[display]
+  {\normalfont\huge\bfseries\color{eodark}}
+  {\filright\Large\color{eoblue}Chapter \thechapter}{0.6ex}{\Huge\raggedright}
+\titlespacing*{\chapter}{0pt}{10pt}{24pt}
+
+%------------------------------------------------------------------ code listing style
+\lstdefinestyle{py}{
+  language=Python,
+  backgroundcolor=\color{codebg},
+  basicstyle=\ttfamily\small,
+  keywordstyle=\color{codekw}\bfseries,
+  stringstyle=\color{codestr},
+  commentstyle=\color{codecom}\itshape,
+  numberstyle=\tiny\color{codecom},
+  numbers=left,
+  numbersep=8pt,
+  frame=single,
+  rulecolor=\color{lightgray},
+  framesep=6pt,
+  breaklines=true,
+  showstringspaces=false,
+  columns=fullflexible,
+  keepspaces=true,
+  literate={\ }{{\ }}1,
+  morekeywords={self,nn,torch,np,F,with,as,assert}
+}
+\lstset{style=py}
+
+%------------------------------------------------------------------ boxes
+\newtcolorbox{objbox}{colback=eoblue!5,colframe=eoblue!70,boxrule=0.7pt,
+  arc=2pt,left=8pt,right=8pt,top=6pt,bottom=6pt,
+  title=\textbf{Learning Objectives},fonttitle=\color{white},
+  coltitle=white,colbacktitle=eoblue!80}
+
+\newtcolorbox{keybox}{colback=eogreen!6,colframe=eogreen!60,boxrule=0.7pt,
+  arc=2pt,left=8pt,right=8pt,top=6pt,bottom=6pt,
+  title=\textbf{Key Concepts},coltitle=white,colbacktitle=eogreen!70}
+
+\newtcolorbox{practbox}{colback=eoearth!8,colframe=eoearth!70,boxrule=0.7pt,
+  arc=2pt,left=8pt,right=8pt,top=6pt,bottom=6pt,
+  title=\textbf{Practical Session},coltitle=white,colbacktitle=eoearth!80}
+
+\newtcolorbox{exbox}{colback=gray!5,colframe=gray!55,boxrule=0.7pt,
+  arc=2pt,left=8pt,right=8pt,top=6pt,bottom=6pt,
+  title=\textbf{Exercises \& Mini-Project},coltitle=white,colbacktitle=gray!60}
+
+\newtcolorbox{notebox}[1][Note]{colback=eored!4,colframe=eored!55,boxrule=0.6pt,
+  arc=2pt,left=8pt,right=8pt,top=5pt,bottom=5pt,
+  title=\textbf{#1},coltitle=white,colbacktitle=eored!65}
+
+% chapter metadata strip
+\newcommand{\chapmeta}[3]{%
+  \begin{center}\small
+  \fcolorbox{lightgray}{lightgray}{\parbox{0.98\linewidth}{\centering
+  \textbf{Difficulty:} #1 \quad$\bullet$\quad \textbf{Duration:} #2 \quad$\bullet$\quad \textbf{Datasets:} #3}}
+  \end{center}\vspace{4pt}}
+
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\E}{\mathbb{E}}
+
+% breakable monospace path macro for long file paths (body text only)
+\newcommand{\nbpath}[1]{\texttt{\seqsplit{#1}}}
+% wide diagrams scaled to fit the text width
+\newcommand{\fitwidth}[1]{\resizebox{\linewidth}{!}{#1}}
+
+\theoremstyle{definition}
+\newtheorem{example}{Example}[chapter]
+
+%==============================================================================
+\begin{document}
+\frontmatter
+
+%------------------------------------------------------------------ title page
+\begin{titlepage}
+\centering
+\vspace*{1.5cm}
+{\color{eoblue}\rule{\linewidth}{1.5pt}}\\[6pt]
+{\Huge\bfseries\color{eodark} Convolutional Neural Networks\\[4pt] for Earth Observation}\\[10pt]
+{\Large A Student Reference Textbook}\\[6pt]
+{\large\itshape From CNN fundamentals to full geospatial deep-learning pipelines}\\[4pt]
+{\color{eoblue}\rule{\linewidth}{1.5pt}}\\[1.4cm]
+
+\begin{tikzpicture}
+  \def\n{7}
+  \foreach \i/\c in {0/eoblue,1/eogreen,2/eoearth,3/eored,4/eodark,5/eoblue,6/eogreen}{
+    \fill[\c!70] (\i*0.9,0) rectangle ++(0.8,0.8);
+  }
+  \node[white,font=\small\bfseries] at (3.15,0.4) {SENTINEL-2};
+\end{tikzpicture}\\[1.4cm]
+
+{\large Backbone project:\\[2pt]\textbf{Sentinel-2 Multiclass Land-Cover Segmentation}}\\[1.2cm]
+
+{\large A production-grade course for advanced Python programmers\\ entering computer vision and remote sensing}\\[2cm]
+
+{\large Companion to the 12-chapter notebook series and the \texttt{eo\_cnn} reference package}\\[0.6cm]
+{\small Edition 1.0 \quad$\cdot$\quad MIT License (materials)}
+\vfill
+\end{titlepage}
+
+\tableofcontents
+
+%------------------------------------------------------------------ preface
+\chapter*{Preface}
+\addcontentsline{toc}{chapter}{Preface}
+\markboth{Preface}{Preface}
+
+This book is the written reference for the course \emph{Convolutional Neural
+Networks for Earth Observation}. It is designed for a reader who is already an
+experienced software engineer and who has trained neural networks before, but
+who has only seen convolutional networks in theory and has little exposure to
+satellite imagery. The goal is not to be an encyclopedia of deep learning;
+it is to take you, chapter by chapter, from the convolution operation to a
+deployable system that turns a raw Sentinel-2 scene into a georeferenced
+land-cover map.
+
+\paragraph{Why a single backbone project.}
+Many courses teach CNNs through a scatter of unrelated toy datasets. This one
+is deliberately built around \emph{one} cohesive arc: land-cover mapping. We
+begin with patch classification on EuroSAT, where the machinery is simplest,
+then graduate to dense pixel-level prediction (semantic segmentation) on
+LoveDA and synthetic Sentinel-2 scenes, and finally assemble a complete
+inference pipeline. Every concept introduced for classification --- the
+encoder, the loss, transfer learning, augmentation --- is reused and extended
+for segmentation. The continuity is the pedagogy.
+
+\paragraph{How to read this book.}
+Each chapter opens with explicit learning objectives, a difficulty/duration
+strip, and the datasets it uses. The body develops the theory with the
+mathematics written out properly, and closes with a \emph{Practical Session}
+box that mirrors the corresponding Jupyter notebook, followed by exercises and
+a mini-project. The mathematics is meant to be read with a pencil; the
+practical boxes are meant to be read with a keyboard. You will get the most
+out of the book by running the matching notebook (\texttt{notebooks/chapter\_NN\_*})
+immediately after each chapter.
+
+\paragraph{Notation.}
+Tensors are written as multidimensional arrays with shape conventions in the
+PyTorch order $(N, C, H, W)$ --- batch, channels, height, width. Scalars are
+lower-case italic ($x$), vectors bold lower-case ($\mathbf{x}$), matrices and
+tensors upper-case ($K$, $I$). A convolution layer is denoted $*$ even though,
+as we will see in Chapter~2, frameworks implement cross-correlation. Spectral
+bands are referenced by their Sentinel-2 names (B02, B03, $\dots$, B12).
+
+\paragraph{Software.}
+All code targets Python~3.12 with PyTorch~$\geq$~2.2, \texttt{torchgeo},
+\texttt{rasterio}, \nbpath{segmentation-models-pytorch}, and
+\texttt{albumentations}. Every notebook runs on Google Colab's free T4 GPU and
+falls back to CPU through a \texttt{FAST\_MODE} flag. Appendix~A gives the full
+environment setup; Appendix~B lists papers, tools and datasets.
+
+\vspace{1em}
+\noindent\emph{A note on figures.} Several figures in this book are generated
+programmatically (script \nbpath{docs/textbook/make\_figures.py}) from the same
+NumPy/Matplotlib stack used in the practicals, so you can reproduce and modify
+them yourself.
+
+%------------------------------------------------------------------ introduction
+\chapter*{Introduction: Choosing the Backbone Project}
+\addcontentsline{toc}{chapter}{Introduction: Choosing the Backbone Project}
+\markboth{Introduction}{Introduction}
+
+Before the first line of code, a curriculum designer must answer one question:
+\emph{which problem should the whole course be built around?} The choice
+determines which CNN concepts can be taught organically and which must be
+bolted on artificially. Three candidate Earth-Observation (EO) projects were
+evaluated.
+
+\section*{The three candidates}
+
+\paragraph{Project 1 --- EuroSAT land-use classification.}
+Classify $64\times64$ Sentinel-2 patches into one of ten land-use classes.
+The dataset (27{,}000 patches, RGB or 13-band, $\sim$90\,MB) downloads in one
+\texttt{torchgeo} call. It is the ``MNIST of EO'': clean, balanced, and fast
+on CPU. It is \emph{ideal} for teaching the classification machinery ---
+softmax, cross-entropy, accuracy, training loops --- but it teaches no spatial
+prediction, no geospatial context, and no encoder--decoder design. Difficulty:
+beginner.
+
+\paragraph{Project 2 --- SpaceNet building-footprint extraction.}
+Binary segmentation of buildings from 30\,cm very-high-resolution imagery with
+polygon labels. Strongly motivating and visually satisfying, but the dataset is
+$\sim$24\,GB, requires AWS tooling, uses proprietary Maxar imagery, and demands
+heavy polygon-to-raster preprocessing before any training. The binary task also
+limits architectural variety. Difficulty: intermediate to advanced; poor
+classroom accessibility.
+
+\paragraph{Project 3 --- Sentinel-2 multiclass land-cover segmentation.}
+Assign every pixel a land-cover class (urban, agriculture, forest, grassland,
+water, bare soil, $\dots$) from multispectral 10\,m imagery, using LoveDA
+(auto-downloaded via \texttt{torchgeo}, $\sim$3\,GB) and synthetic/real
+Sentinel-2 scenes. It exercises the \emph{entire} CNN curriculum --- spatial
+convolution, pooling, skip connections, transfer learning, augmentation,
+dense-prediction losses and metrics --- and all EO-specific skills: multi-band
+loading, spectral indices, normalization, tiling, sliding-window inference, and
+GeoTIFF export. Difficulty: intermediate to advanced, with a beginner on-ramp
+through EuroSAT.
+
+\section*{Comparative evaluation}
+
+\begin{center}\small
+\renewcommand{\arraystretch}{1.25}
+\begin{tabularx}{\linewidth}{@{}lXXX@{}}
+\toprule
+\textbf{Criterion} & \textbf{EuroSAT} & \textbf{SpaceNet} & \textbf{S2 land cover}\\
+\midrule
+Task type & Classification & Binary segmentation & \textbf{Multiclass seg.}\\
+Educational breadth & Narrow & Medium & \textbf{Wide}\\
+Dataset access & Excellent (90\,MB) & Poor (24\,GB, AWS) & \textbf{Excellent (3\,GB)}\\
+Annotation quality & Excellent & Variable & Good (expert)\\
+Compute needs & Very low & High & Medium (GPU)\\
+Geospatial preproc. & None & Medium & \textbf{Full}\\
+Visual output & Low & Medium & \textbf{High}\\
+Transfer-learning demo & Good & Good & \textbf{Excellent}\\
+Augmentation relevance & Low & Medium & \textbf{High}\\
+Industry relevance & Medium & High & \textbf{Highest}\\
+Beginner friendliness & \textbf{Excellent} & Poor & Good\\
+Full pipeline & No & Partial & \textbf{Yes}\\
+Architecture diversity & Low & Medium & \textbf{High}\\
+Multi-band / indices & MS variant & No & \textbf{Yes}\\
+\midrule
+\textbf{Overall (1--10)} & 7 & 6 & \textbf{9}\\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\section*{Decision}
+
+The backbone of this course is \textbf{Sentinel-2 multiclass land-cover
+segmentation}. It is the only candidate that sustains a coherent twelve-chapter
+arc without an awkward pivot: EuroSAT classification provides the beginner
+on-ramp (Chapters 5--8), the same encoder is reused inside a U-Net for
+segmentation (Chapters 9--10), and the course culminates in full-scene
+inference and a GeoTIFF map (Chapters 11--12 and the capstone). It mirrors real
+production systems --- ESA WorldCover, Google Dynamic World, Planet NICFI ---
+so the skills transfer directly to industry. SpaceNet's data friction and
+EuroSAT's pedagogical ceiling rule them out as \emph{sole} backbones, though
+EuroSAT serves perfectly as the introductory vehicle inside this larger arc.
+
+\begin{center}
+\begin{tikzpicture}[font=\small,node distance=6mm]
+  \tikzstyle{b}=[draw,rounded corners,minimum height=9mm,minimum width=30mm,align=center,fill=eoblue!8]
+  \node[b] (a) {EuroSAT\\classification\\\scriptsize(Ch.\,5--8)};
+  \node[b,right=14mm of a,fill=eogreen!10] (c) {U-Net binary/\\multiclass seg.\\\scriptsize(Ch.\,9--10)};
+  \node[b,right=14mm of c,fill=eoearth!12] (d) {Full-scene\\GeoTIFF pipeline\\\scriptsize(Ch.\,11--12, cap.)};
+  \draw[-{Latex},thick] (a)--(c);
+  \draw[-{Latex},thick] (c)--(d);
+\end{tikzpicture}
+\end{center}
+
+\noindent The shared encoder is the thread: only the decoder head changes as we
+move from classification to dense prediction.
+
+\mainmatter
+
+\part{Foundations: From Pixels to Convolutions}
+\input{chapters/ch01_intro}
+\input{chapters/ch02_convolution}
+\input{chapters/ch03_building_blocks}
+\input{chapters/ch04_preprocessing}
+
+\part{Classification: The First Complete Pipeline}
+\input{chapters/ch05_classification}
+\input{chapters/ch06_architectures}
+\input{chapters/ch07_transfer}
+\input{chapters/ch08_augmentation}
+
+\part{Segmentation and Geospatial Pipelines}
+\input{chapters/ch09_segmentation}
+\input{chapters/ch10_advanced_seg}
+\input{chapters/ch11_pipeline}
+\input{chapters/ch12_evaluation}
+
+\part{Capstone and Reference}
+\input{chapters/ch13_capstone}
+
+\appendix
+\input{chapters/appA_infrastructure}
+\input{chapters/appB_resources}
+
+\end{document}

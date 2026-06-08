@@ -1,0 +1,127 @@
+\chapter{Capstone: End-to-End Land-Cover Mapping}
+\label{ch:capstone}
+
+\chapmeta{Advanced}{$\sim$10\,h ($\sim$4 weeks part-time)}{LoveDA and/or Sentinel-2 + OSM labels}
+
+\begin{objbox}
+\begin{itemize}[leftmargin=1.2em,nosep]
+  \item Integrate the entire course into one production-grade system, independently.
+  \item Take a raw Sentinel-2 Level-2A scene to a georeferenced land-cover GeoTIFF.
+  \item Justify every design choice (encoder, decoder, loss, augmentation).
+  \item Evaluate rigorously and analyse failures.
+  \item Package a portfolio-ready deliverable.
+\end{itemize}
+\end{objbox}
+
+This is not a tutorial: there is no step-by-step guide. You apply everything from
+Chapters~\ref{ch:intro}--\ref{ch:eval} to solve a real mapping problem on your
+own. Notebook: \nbpath{notebooks/capstone/capstone\_land\_cover\_mapping.ipynb}.
+
+\section{Problem statement}
+
+Given a Sentinel-2 Level-2A tile (bottom-of-atmosphere reflectance, 12 usable
+bands, $\sim$$110\times110$\,km), produce a pixel-level land-cover map over seven
+classes.
+
+\begin{center}\small
+\renewcommand{\arraystretch}{1.15}
+\begin{tabular}{@{}cll@{}}
+\toprule
+ID & Class & Colour\\
+\midrule
+0 & Background / no-data & \texttt{\#000000}\\
+1 & Urban / built-up & \texttt{\#E30B0B}\\
+2 & Agriculture & \texttt{\#F5E642}\\
+3 & Forest & \texttt{\#1A7A1A}\\
+4 & Shrubland / grassland & \texttt{\#8FD68F}\\
+5 & Water & \texttt{\#1E56C8}\\
+6 & Bare soil / rock & \texttt{\#A0754A}\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\section{Mandatory components}
+
+\begin{description}[leftmargin=1.6em,style=nextline]
+  \item[Data pipeline] load with \texttt{rasterio}/\texttt{rioxarray}; stack
+  B02/B03/B04/B08 (10\,m) with B05--B07/B8A/B11/B12 (20\,m, upsampled); compute
+  $\geq$2 indices (NDVI, NDWI, $\dots$); normalize with training statistics;
+  generate $512\times512$ tiles with configurable overlap.
+  \item[Model]   an SMP model with a pretrained encoder; justify the encoder
+  (ResNet50, EfficientNet-B4 or MobileNetV3) and the decoder (U-Net, FPN or
+  DeepLabV3+);
+  handle class imbalance with weighted Dice or focal loss.
+  \item[Training] LoveDA or Sentinel-2 + OSM-derived labels; early stopping;
+  $\geq$4 augmentation types; log loss and IoU per epoch; checkpoint on best
+  validation mIoU.
+  \item[Evaluation] per-class IoU, mIoU, F1, overall accuracy; confusion matrix;
+  $\geq$5 qualitative examples with GT overlays; GradCAM for $\geq$1 class.
+  \item[Inference] sliding-window over the full tile with Gaussian blending;
+  reconstruct; export a georeferenced GeoTIFF with correct CRS/transform.
+  \item[Visualisation] colour-coded map with legend; true-colour vs prediction
+  side-by-side; per-class area in hectares.
+\end{description}
+
+\section{Deliverables and rubric}
+
+\begin{center}\small
+\renewcommand{\arraystretch}{1.15}
+\begin{tabular}{@{}lll@{}}
+\toprule
+Deliverable & Format & Weight\\
+\midrule
+End-to-end executed notebook & \texttt{.ipynb} & 40\%\\
+Trained model checkpoint & \texttt{.pth} & 10\%\\
+Prediction GeoTIFF (with CRS) & \texttt{.tif} & 15\%\\
+Evaluation report (metrics + confusion matrix) & MD/PDF & 20\%\\
+Technical writeup (max 2 pages) & PDF/MD & 15\%\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The 100-point rubric is split evenly across five areas --- Data pipeline, Model
+architecture, Training, Evaluation, Inference+GeoTIFF (20 points each). Full
+marks require not just working code but \emph{justified} choices: a silently used
+default encoder scores zero on that criterion even if accurate. A validation
+mIoU $\geq 40\%$ earns the evaluation points; $30$--$40\%$ partial.
+Grades: Distinction $85$--$100$, Merit $70$--$84$, Pass $55$--$69$.
+
+\begin{center}\small
+\renewcommand{\arraystretch}{1.15}
+\begin{tabular}{@{}ll@{}}
+\toprule
+Week & Focus\\
+\midrule
+1 & Data pipeline: loading, normalization, tiling\\
+2 & Model setup, first training run, baseline metrics\\
+3 & Ablations (loss functions, encoders, augmentation)\\
+4 & Inference pipeline, GeoTIFF export, evaluation report\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\section{Extension ideas}
+
+For a Distinction-level project, push beyond the brief:
+multi-temporal fusion (stack two seasons to improve agricultural classes);
+domain generalisation (train on one region, test on another, analyse the shift);
+Sentinel-1 SAR fusion (add backscatter channels, measure gains on water/urban);
+uncertainty via Monte-Carlo dropout; CRF post-processing for sharper boundaries;
+or a Streamlit/FastAPI demo that ingests a GeoTIFF and returns a prediction map.
+
+\section{Portfolio checklist}
+
+\begin{itemize}[leftmargin=1.4em,nosep]
+  \item Notebook runs end-to-end from a clean kernel restart.
+  \item Every cell has explanatory markdown; every figure has titles, labels, legends.
+  \item GeoTIFF opens and aligns correctly in QGIS.
+  \item A \texttt{README} explains how to reproduce; checkpoint $<500$\,MB (Git LFS if needed).
+  \item The report discusses failure cases honestly.
+\end{itemize}
+
+\begin{notebox}[The point of the capstone]
+The capstone is the artefact you show an employer. A clear writeup, a
+banner figure (true-colour vs prediction), an honest limitations section and a
+one-line headline (``ResNet50 + DeepLabV3+, mIoU 58\% on LoveDA'') demonstrate
+end-to-end competence more convincingly than any single notebook from the course.
+\end{notebox}

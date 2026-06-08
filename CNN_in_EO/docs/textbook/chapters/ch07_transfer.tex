@@ -1,0 +1,125 @@
+\chapter{Transfer Learning for Earth Observation}
+\label{ch:transfer}
+
+\chapmeta{Intermediate}{$\sim$5\,h (2\,h + 3\,h)}{EuroSAT RGB + MS}
+
+\begin{objbox}
+\begin{itemize}[leftmargin=1.2em,nosep]
+  \item Explain why ImageNet features transfer to satellite imagery --- and their limits.
+  \item Distinguish the three transfer regimes: feature extraction, fine-tuning, from scratch.
+  \item Adapt an RGB-pretrained first convolution to multispectral input.
+  \item Apply discriminative (layer-wise) learning rates and progressive unfreezing.
+  \item Quantify the accuracy and data-efficiency gains from pretraining.
+\end{itemize}
+\end{objbox}
+
+\section{Why ImageNet transfers to EO}
+
+A network pretrained on ImageNet has already learned, in its early layers, a
+generic visual vocabulary: oriented edges, colour-opponent filters, blobs and
+textures. These low- and mid-level features are \emph{not} specific to cats and
+cars --- they describe natural images in general, and satellite scenes share
+much of that statistics (edges of fields, textures of canopy and urban fabric).
+Reusing them gives three benefits: faster convergence, higher final accuracy,
+and far better performance in the small-data regime that characterises most EO
+labelling efforts. The transfer weakens in the deepest, most task-specific
+layers and across the \emph{domain gap}: satellite imagery is nadir-looking,
+multispectral, and statistically different from web photos, so some adaptation
+is always needed.
+
+\section{Three transfer regimes}
+
+Let $f_\theta = h \circ g$ split a pretrained network into a feature extractor
+$g$ (the convolutional backbone) and a head $h$.
+\begin{description}[leftmargin=1.6em,style=nextline]
+  \item[Feature extraction (linear probe)] freeze $g$, train only a new head $h$.
+  Fast, few parameters, robust on tiny datasets; accuracy capped by the frozen
+  features.
+  \item[Fine-tuning] initialise from pretrained weights and train \emph{all}
+  parameters at a small learning rate. Highest accuracy when you have moderate
+  data; risk of catastrophic forgetting if the LR is too high.
+  \item[From scratch] random initialisation. Needed only with abundant labels or
+  a large domain gap (e.g.\ SAR); usually worse and slower for optical EO.
+\end{description}
+On EuroSAT the ordering is reliably \emph{fine-tune $>$ linear probe $>$ scratch},
+and fine-tuning reaches strong accuracy in a handful of epochs where a
+from-scratch model needs many more.
+
+\section{Adapting the first convolution for multispectral input}
+
+ImageNet weights expect three input channels, but Sentinel-2 has up to 13. The
+first convolution's weight has shape $(C_\mathrm{out},3,k,k)$; we must build a
+$(C_\mathrm{out},C_\mathrm{in},k,k)$ replacement that preserves the learned RGB
+filters. Two standard strategies:
+\begin{enumerate}[leftmargin=1.5em,nosep]
+  \item \textbf{Copy-and-scale}: place the pretrained RGB weights on the
+  corresponding bands and initialise the extra channels as the \emph{mean} of the
+  RGB filters, scaling by $3/C_\mathrm{in}$ to preserve the activation magnitude.
+  \item \textbf{Inflate}: tile the mean RGB filter across all $C_\mathrm{in}$
+  channels.
+\end{enumerate}
+\begin{lstlisting}
+import torch, torch.nn as nn
+def adapt_first_conv(conv_rgb: nn.Conv2d, in_ch: int) -> nn.Conv2d:
+    new = nn.Conv2d(in_ch, conv_rgb.out_channels, conv_rgb.kernel_size,
+                    conv_rgb.stride, conv_rgb.padding, bias=False)
+    w = conv_rgb.weight.data                      # (out, 3, k, k)
+    mean = w.mean(dim=1, keepdim=True)            # (out, 1, k, k)
+    new.weight.data = mean.repeat(1, in_ch, 1, 1) * (3.0 / in_ch)
+    new.weight.data[:, :3] = w                    # keep RGB on first 3 bands
+    return new
+\end{lstlisting}
+This retains the value of pretraining while accepting the extra spectral bands
+that often lift the spectrally-confused EuroSAT classes.
+
+\section{Discriminative learning rates and progressive unfreezing}
+
+Early layers encode general features and should change little; later layers are
+task-specific and can move more. \emph{Discriminative} (layer-wise) learning
+rates assign smaller LRs to earlier layer groups, e.g.\ $\eta_\ell =
+\eta_0\,\rho^{L-\ell}$ with decay $\rho<1$. \emph{Progressive unfreezing} trains
+the head first, then unfreezes layer groups from the top down across epochs.
+Both reduce forgetting and stabilise fine-tuning, especially with little data.
+
+\section{Measuring the payoff}
+
+The clearest demonstration is a data-efficiency curve: train each regime on
+$\{5\%, 10\%, 25\%, 100\%\}$ of EuroSAT and plot test accuracy versus label
+budget. Pretrained models dominate everywhere and the gap widens as labels
+shrink --- the practical reason transfer learning is standard in EO, where
+expert annotation is the bottleneck. These same pretrained encoders are dropped
+directly into U-Net/DeepLab decoders next, where they raise segmentation mIoU by
+10--15 points (Chapters~\ref{ch:seg}--\ref{ch:advseg}).
+
+\begin{keybox}
+\begin{itemize}[leftmargin=1.2em,nosep]
+  \item Early ImageNet features (edges/textures) transfer to EO; deep, domain-specific ones less so.
+  \item Regimes: feature extraction $<$ fine-tuning (usually best) ; scratch only with much data / large domain gap.
+  \item Adapt the first conv to $C_\mathrm{in}$ bands while preserving RGB weights.
+  \item Discriminative LRs and progressive unfreezing tame fine-tuning.
+  \item Pretraining's edge is largest in the low-label regime typical of EO.
+\end{itemize}
+\end{keybox}
+
+\begin{practbox}
+Notebook: \nbpath{chapter\_07\_transfer\_learning/07\_practical\_transfer\_learning.ipynb}.
+\begin{enumerate}[leftmargin=1.4em,nosep]
+  \item Train ResNet50 on EuroSAT in three regimes (scratch / linear probe /
+  fine-tune); compare accuracy and convergence.
+  \item Adapt ResNet's first conv for 13-band EuroSAT-MS with
+  \texttt{adapt\_first\_conv}; verify shapes and that RGB filters are preserved.
+  \item Apply discriminative learning rates via parameter groups.
+  \item Plot a data-efficiency curve over label fractions.
+\end{enumerate}
+\end{practbox}
+
+\begin{exbox}
+\textbf{7.1 Layer-wise LR decay.} Implement $\eta_\ell=\eta_0\rho^{L-\ell}$ with
+parameter groups; sweep $\rho$ and report the best.\\[2pt]
+\textbf{7.2 MS vs RGB.} Compare fine-tuned accuracy on EuroSAT-RGB vs MS; which
+classes benefit most from extra bands?\\[2pt]
+\textbf{7.3 Forgetting.} Fine-tune at a deliberately high LR and show
+catastrophic forgetting in the loss curve; fix it with a warmup.\\[2pt]
+\textbf{Mini-project.} Build a \texttt{ProgressiveFinetuner} that unfreezes layer
+groups on a schedule, and reproduce or beat your best fine-tuning result.
+\end{exbox}

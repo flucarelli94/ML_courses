@@ -1,0 +1,106 @@
+\chapter{Resources and Further Reading}
+\label{app:resources}
+
+\section{Foundational papers}
+
+\paragraph{CNN architectures.}
+LeCun et al.\ (1998, LeNet-5) --- the conv-pool-FC template;
+Krizhevsky et al.\ (2012, AlexNet) --- ReLU, dropout, GPU training;
+Simonyan \& Zisserman (2014, VGG) --- depth from stacked $3\times3$;
+He et al.\ (2015, ResNet) --- residual connections;
+Tan \& Le (2019, EfficientNet) --- compound scaling;
+Dosovitskiy et al.\ (2020, ViT) --- attention in vision.
+
+\paragraph{Semantic segmentation.}
+Long et al.\ (2014, FCN) --- first fully convolutional segmentation;
+Ronneberger et al.\ (2015, U-Net) --- encoder--decoder with skips;
+Chen et al.\ (2018, DeepLabV3+) --- ASPP + decoder;
+Lin et al.\ (2017, FPN) --- feature pyramids;
+Zhao et al.\ (2017, PSPNet) --- pyramid pooling.
+
+\paragraph{EO / remote-sensing deep learning.}
+Helber et al.\ (2019, EuroSAT); Wang et al.\ (2021, LoveDA);
+Sumbul et al.\ (2019, BigEarthNet); Schmitt et al.\ (2019, SEN12MS);
+Zhu et al.\ (2017) and Ma et al.\ (2019) surveys of DL in remote sensing;
+Rolf et al.\ (2021) on distribution shift in satellite ML.
+
+\paragraph{Transfer learning.}
+Yosinski et al.\ (2014, transferability of features);
+Neyshabur et al.\ (2020, what is transferred);
+Marmanis et al.\ (2015, ImageNet$\to$EO transfer).
+
+\section{Courses and documentation}
+
+\begin{center}\small
+\renewcommand{\arraystretch}{1.15}
+\begin{tabular}{@{}ll@{}}
+\toprule
+Resource & Focus\\
+\midrule
+fast.ai Practical Deep Learning & practical DL with PyTorch\\
+Stanford CS231n & CNN theory from fundamentals\\
+PyTorch tutorials & framework implementation\\
+torchgeo docs & EO datasets, GeoDatasets\\
+SMP docs & segmentation model library\\
+rasterio user guide & geospatial raster I/O\\
+ESA EO College & remote-sensing background\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\section{Visualisation and GIS tools}
+
+In-notebook: \texttt{matplotlib} (all plots), \texttt{seaborn} (confusion
+matrices), \texttt{plotly}/\texttt{folium}/\texttt{ipyleaflet} (interactive
+maps), \texttt{earthpy} (band composites), \texttt{rasterio.plot.show} (quick
+GeoTIFF view). External GIS: QGIS (open prediction GeoTIFFs over OSM), Google
+Earth Pro, ArcGIS Online, GeoServer (serve as WMS/WCS).
+
+\section{Deployment ideas}
+
+A FastAPI \texttt{/predict} endpoint that ingests a GeoTIFF and returns a
+prediction map; a Streamlit dashboard (upload tile $\to$ map $\to$ download);
+Google Earth Engine asset export; a Docker image based on a CUDA PyTorch base;
+ONNX export for edge deployment on Jetson/OpenVINO.
+
+\section{Portfolio suggestions}
+
+Structure a public repo as \texttt{README} (banner + headline metric),
+\texttt{model\_card.md} (architecture, training, limitations), executed
+notebook, 2-page report, and an \texttt{assets/} folder (RGB tile, prediction
+GeoTIFF, confusion matrix). A short GIF of the sliding-window inference
+progressively covering a scene is a compelling LinkedIn/portfolio post.
+
+\section{Future advanced topics}
+
+Vision transformers for EO (SatMAE, Scale-MAE, Spectral-GPT);
+self-supervised pretraining on Sentinel-2 (DINO, MAE);
+change detection (FC-EF, BIT-CD); object detection in aerial imagery
+(DOTA, oriented R-CNN, YOLO); time-series models (U-TAE, SITS-BERT);
+EO foundation models (Prithvi, RemoteCLIP, GeoChat);
+multi-modal SAR+optical and hyperspectral fusion; instance segmentation of
+building footprints; continual learning across geographies.
+
+\section{Dataset licenses}
+
+\begin{center}\small
+\renewcommand{\arraystretch}{1.15}
+\begin{tabular}{@{}lll@{}}
+\toprule
+Dataset & License & Commercial use\\
+\midrule
+EuroSAT & MIT & yes\\
+LoveDA & CC-BY-4.0 & yes (attribution)\\
+BigEarthNet & CC-BY-4.0 & yes (attribution)\\
+SpaceNet & CC-BY-SA-4.0 & attribution required\\
+Sentinel-2 & Copernicus Open Access & yes\\
+OpenStreetMap & ODbL & attribution required\\
+Dynamic World labels & CC-BY-4.0 & yes (attribution)\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\vfill
+\begin{center}\itshape
+End of textbook. Now go and map the planet.
+\end{center}

@@ -1,0 +1,122 @@
+\chapter{Advanced Segmentation Architectures}
+\label{ch:advseg}
+
+\chapmeta{Advanced}{$\sim$5\,h (2\,h + 3\,h)}{LoveDA}
+
+\begin{objbox}
+\begin{itemize}[leftmargin=1.2em,nosep]
+  \item Use \texttt{segmentation-models-pytorch} (SMP) to build decoders on pretrained encoders.
+  \item Understand atrous (dilated) convolution and DeepLabV3+'s ASPP module.
+  \item Understand multi-scale context: FPN and PSPNet pyramid pooling.
+  \item Benchmark architectures fairly on a common dataset and budget.
+  \item Choose an architecture/encoder for a given EO constraint.
+\end{itemize}
+\end{objbox}
+
+The hand-built U-Net of Chapter~\ref{ch:seg} taught the mechanics. In practice
+we assemble decoders on top of pretrained encoders with a library, and choose
+among architectures designed to capture \emph{multi-scale context} --- essential
+in EO, where land-cover objects range from single trees to whole agricultural
+regions.
+
+\section{segmentation-models-pytorch}
+
+SMP exposes every architecture through one uniform constructor, pairing a
+decoder with any of dozens of pretrained encoders (\texttt{timm}-backed):
+\begin{lstlisting}
+import segmentation_models_pytorch as smp
+model = smp.Unet(encoder_name="resnet50", encoder_weights="imagenet",
+                 in_channels=3, classes=7)
+# swap decoder by changing the class: smp.DeepLabV3Plus / smp.FPN / smp.PSPNet
+\end{lstlisting}
+For multispectral input set \texttt{in\_channels=13}; SMP adapts the first
+convolution automatically (cf.\ Chapter~\ref{ch:transfer}). This one-line
+flexibility is what makes principled architecture comparison feasible.
+
+\section{Atrous convolution and DeepLabV3+}
+
+A standard convolution must pool to enlarge its receptive field, sacrificing
+resolution. \emph{Atrous} (dilated) convolution inserts gaps of rate $r$ between
+kernel taps, enlarging the receptive field \emph{without} downsampling or extra
+parameters. A dilated $k\times k$ kernel has an effective size
+\begin{equation}
+k_\mathrm{eff} = k + (k-1)(r-1),
+\end{equation}
+so a $3\times3$ kernel at rate $r{=}6$ covers $13\times13$. DeepLabV3+ uses
+\emph{Atrous Spatial Pyramid Pooling} (ASPP): several parallel atrous
+convolutions at different rates (e.g.\ $6,12,18$) plus image-level global
+pooling, concatenated to fuse context at multiple scales, followed by a light
+decoder that recovers boundaries. It excels when objects span very different
+sizes --- the norm in land cover.
+
+\section{FPN and PSPNet}
+
+\emph{Feature Pyramid Networks} (FPN) build a top-down pathway with lateral
+connections, producing semantically strong features at every resolution and
+fusing predictions across the pyramid --- naturally multi-scale and efficient.
+\emph{PSPNet} introduces the \emph{pyramid pooling module}, pooling the deepest
+feature map at several grid scales ($1\times1, 2\times2, 3\times3, 6\times6$),
+processing each, and concatenating, injecting global scene context that helps
+disambiguate locally-similar classes (e.g.\ shadowed roof vs water). All three
+--- DeepLabV3+, FPN, PSPNet --- attack the same problem (context at multiple
+scales) by different means.
+
+\section{A fair benchmark}
+
+Comparisons are only meaningful under a fixed protocol: same encoder, same data
+splits, same augmentation, same epochs and optimiser, varying only the decoder.
+Report mIoU, parameters, and inference latency.
+
+\begin{center}\small
+\renewcommand{\arraystretch}{1.2}
+\begin{tabular}{@{}lllll@{}}
+\toprule
+Decoder & Context mechanism & Params & Strength & Typical use\\
+\midrule
+U-Net & skip connections & low--med & sharp boundaries & default, small data\\
+FPN & feature pyramid & low & multi-scale, fast & efficient inference\\
+PSPNet & pyramid pooling & med & global context & scene-level classes\\
+DeepLabV3+ & ASPP (atrous) & med--high & multi-scale + edges & best all-round\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\noindent On LoveDA with a ResNet50 encoder the four are usually within a few
+mIoU points; DeepLabV3+ tends to lead on boundary-heavy urban scenes, U-Net
+remains a strong, low-memory default, and FPN is attractive when latency
+matters. The lesson is to \emph{measure on your data and budget} rather than
+trust leaderboard ranks from another domain.
+
+\begin{keybox}
+\begin{itemize}[leftmargin=1.2em,nosep]
+  \item SMP $=$ decoder $\times$ pretrained encoder via one constructor; trivial multispectral support.
+  \item Atrous convolution grows the receptive field without losing resolution; $k_\mathrm{eff}=k+(k-1)(r-1)$.
+  \item DeepLabV3+ (ASPP), FPN and PSPNet all capture multi-scale context differently.
+  \item Benchmark fairly: fix everything but the decoder; report mIoU, params, latency.
+  \item No universal winner --- choose for your data, objects' scale, and compute budget.
+\end{itemize}
+\end{keybox}
+
+\begin{practbox}
+Notebook: \nbpath{chapter\_10\_advanced\_segmentation/10\_practical\_advanced\_segmentation.ipynb}.
+\begin{enumerate}[leftmargin=1.4em,nosep]
+  \item Build U-Net, DeepLabV3+, FPN and PSPNet with SMP on a shared ResNet50
+  encoder; print parameter counts.
+  \item Visualise how atrous rate enlarges the receptive field.
+  \item Run a fixed-protocol benchmark of the four decoders for a few epochs.
+  \item Plot mIoU vs params vs latency; pick a winner.
+  \item Train the winner longer and display prediction triplets.
+\end{enumerate}
+\end{practbox}
+
+\begin{exbox}
+\textbf{10.1 Encoder swap.} Hold the decoder fixed and compare ResNet34/50 and
+EfficientNet-B0/B4 encoders by mIoU and speed.\\[2pt]
+\textbf{10.2 ASPP rates.} Vary DeepLab's atrous rates; relate them to the object
+scales in LoveDA.\\[2pt]
+\textbf{10.3 Multispectral.} Rebuild the best model with \texttt{in\_channels=13}
+on a multispectral dataset; measure the gain over RGB.\\[2pt]
+\textbf{Mini-project.} Produce a one-page ``architecture selection'' report
+recommending a decoder+encoder for (a) a latency-constrained edge device and (b)
+a maximum-accuracy server, justified by your benchmark.
+\end{exbox}

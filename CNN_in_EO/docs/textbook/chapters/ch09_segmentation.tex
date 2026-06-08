@@ -1,0 +1,174 @@
+\chapter{Semantic Segmentation and the U-Net}
+\label{ch:seg}
+
+\chapmeta{Intermediate $\to$ Advanced}{$\sim$6\,h (2.5\,h + 3.5\,h)}{LoveDA (torchgeo)}
+
+\begin{objbox}
+\begin{itemize}[leftmargin=1.2em,nosep]
+  \item Reframe the task from one label per image to one label per pixel.
+  \item Understand the encoder--decoder design and the role of skip connections.
+  \item Implement a U-Net from scratch and trace its tensor shapes.
+  \item Choose and combine segmentation losses (cross-entropy, Dice).
+  \item Train and evaluate a U-Net on the LoveDA land-cover dataset.
+\end{itemize}
+\end{objbox}
+
+\section{From classification to dense prediction}
+
+Classification answers ``what is in this patch?'' with a single label.
+\emph{Semantic segmentation} answers ``what is at every pixel?'', producing an
+output of shape $(K,H,W)$ --- a per-pixel class distribution at full input
+resolution. The challenge is that the classification encoder repeatedly
+\emph{downsamples} (for receptive field and efficiency), so we must recover
+spatial detail. The encoder--decoder family does this: an encoder contracts to a
+compact, semantically rich representation, and a decoder expands back to full
+resolution. The decoder upsamples with transposed convolutions or
+interpolation+convolution; the key difficulty is that pooling has discarded the
+fine localisation information the decoder needs.
+
+\section{The U-Net architecture}
+
+U-Net (Ronneberger et al., 2015) solves this with \emph{skip connections} that
+carry high-resolution encoder feature maps directly to the matching decoder
+stage, concatenating them before each decoder convolution
+(Figure~\ref{fig:unet}). The encoder provides ``what''; the skips restore
+``where''. This single idea is why U-Net dominates medical and EO segmentation.
+
+\begin{figure}[h]
+\centering
+\begin{tikzpicture}[font=\scriptsize,>=Latex,node distance=4mm]
+  \tikzstyle{enc}=[draw,fill=eoblue!12,minimum width=7mm]
+  \tikzstyle{dec}=[draw,fill=eogreen!14,minimum width=7mm]
+  \tikzstyle{bott}=[draw,fill=eoearth!18,minimum width=7mm]
+  % encoder (heights shrink), placed left going down
+  \node[enc,minimum height=22mm] (e1) {};
+  \node[below=10mm of e1.south,enc,minimum height=16mm,anchor=north] (e2) {};
+  \node[below=10mm of e2.south,enc,minimum height=11mm,anchor=north] (e3) {};
+  \node[below=10mm of e3.south,bott,minimum height=7mm,anchor=north] (b) {};
+  % decoder (heights grow), to the right
+  \node[right=42mm of e3,dec,minimum height=11mm] (d3) {};
+  \node[above=10mm of d3.north,dec,minimum height=16mm,anchor=south] (d2) {};
+  \node[above=10mm of d2.north,dec,minimum height=22mm,anchor=south] (d1) {};
+  \node[right=4mm of d1,draw,fill=eored!18,minimum height=22mm,minimum width=5mm] (out) {};
+  % down arrows
+  \draw[->] (e1.south) -- (e2.north) node[midway,right]{pool};
+  \draw[->] (e2.south) -- (e3.north) node[midway,right]{pool};
+  \draw[->] (e3.south) -- (b.north) node[midway,right]{pool};
+  % up arrows
+  \draw[->] (b.east) -| ($(b.east)!0.5!(d3.west)$) |- (d3.west) node[pos=0.9,above]{up};
+  \draw[->] (d3.north) -- (d2.south) node[midway,right]{up};
+  \draw[->] (d2.north) -- (d1.south) node[midway,right]{up};
+  \draw[->] (d1.east) -- (out.west) node[midway,above]{$1\times1$};
+  % skip connections
+  \draw[->,eored,thick,dashed] (e1.east) -- (d1.west) node[midway,above,black]{skip (concat)};
+  \draw[->,eored,thick,dashed] (e2.east) -- (d2.west);
+  \draw[->,eored,thick,dashed] (e3.east) -- (d3.west);
+  \node[above=1mm of e1]{encoder}; \node[above=1mm of d1]{decoder};
+  \node[below=1mm of b]{bottleneck};
+  \node[right=0.5mm of out]{\rotatebox{-90}{$K{\times}H{\times}W$ logits}};
+\end{tikzpicture}
+\caption{U-Net. The encoder (blue) halves resolution and doubles channels at
+each stage; the decoder (green) mirrors it, upsampling and halving channels.
+Dashed red skip connections concatenate same-resolution encoder features into
+the decoder, restoring spatial detail lost to pooling. A final $1\times1$
+convolution maps to $K$ class logits per pixel.}
+\label{fig:unet}
+\end{figure}
+
+A minimal from-scratch U-Net uses a reusable double-convolution block:
+\begin{lstlisting}
+import torch, torch.nn as nn
+class DoubleConv(nn.Module):
+    def __init__(self, cin, cout):
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.Conv2d(cin, cout, 3, padding=1, bias=False),
+            nn.BatchNorm2d(cout), nn.ReLU(inplace=True),
+            nn.Conv2d(cout, cout, 3, padding=1, bias=False),
+            nn.BatchNorm2d(cout), nn.ReLU(inplace=True))
+    def forward(self, x): return self.net(x)
+
+class Up(nn.Module):
+    def __init__(self, cin, cout):
+        super().__init__()
+        self.up = nn.ConvTranspose2d(cin, cin // 2, 2, stride=2)
+        self.conv = DoubleConv(cin, cout)            # cin = up + skip channels
+    def forward(self, x, skip):
+        x = self.up(x)
+        x = torch.cat([skip, x], dim=1)              # concatenate skip
+        return self.conv(x)
+\end{lstlisting}
+Tracing shapes for a $256\times256$ input with base width 64: the encoder
+produces feature maps at $256,128,64,32$ resolutions with $64,128,256,512$
+channels; the decoder reverses this, each \texttt{Up} consuming the matching
+skip; the head outputs $(K,256,256)$.
+
+\section{Loss functions for segmentation}
+
+Per-pixel cross-entropy (Eq.~\ref{eq:ce}, summed over pixels) is the baseline,
+but land-cover classes are imbalanced (water and bare soil are rare), and CE is
+dominated by frequent classes. The \emph{Dice loss} directly optimises overlap
+and is robust to imbalance. For predicted soft probabilities $p$ and one-hot
+target $g$ over $N$ pixels and class $k$:
+\begin{equation}
+\mathcal{L}_{\mathrm{Dice}} = 1 - \frac{1}{K}\sum_{k=1}^{K}
+\frac{2\sum_i p_{ik}\,g_{ik} + \varepsilon}{\sum_i p_{ik} + \sum_i g_{ik} + \varepsilon}.
+\label{eq:dice}
+\end{equation}
+In practice a \emph{combined} loss works best, pairing CE's well-behaved
+gradients with Dice's overlap objective:
+\begin{equation}
+\mathcal{L} = \mathcal{L}_{\mathrm{CE}} + \lambda\,\mathcal{L}_{\mathrm{Dice}},
+\qquad \lambda \approx 1.
+\end{equation}
+For severe imbalance, class-weighted CE or focal loss (down-weighting easy
+pixels) are alternatives. We measure success with IoU/mIoU, defined in
+Chapter~\ref{ch:eval}.
+
+\section{Training on LoveDA}
+
+LoveDA (Wang et al., 2021) provides 5{,}987 high-resolution
+($1024\times1024$) scenes over urban and rural domains with seven land-cover
+classes, auto-downloaded via \texttt{torchgeo}. The recipe combines everything
+so far: tile to $512\times512$ (Chapter~\ref{ch:preproc}), augment image+mask
+jointly (Chapter~\ref{ch:aug}), use a U-Net (optionally with a pretrained
+encoder, Chapter~\ref{ch:transfer}), optimise the combined loss, and checkpoint
+on validation mIoU. The ablation that most convinces students: train the U-Net
+\emph{with} and \emph{without} skip connections --- the no-skip variant produces
+blurry, mislocalised masks and markedly lower mIoU, making the role of the skips
+concrete.
+
+\begin{keybox}
+\begin{itemize}[leftmargin=1.2em,nosep]
+  \item Segmentation outputs $(K,H,W)$: a class distribution per pixel.
+  \item Encoder--decoder recovers resolution; skip connections restore localisation (``what'' + ``where'').
+  \item Decoder upsamples via transposed conv (or interpolate+conv) and concatenates skips.
+  \item Combine cross-entropy with Dice (Eq.~\ref{eq:dice}) for imbalanced land cover.
+  \item Pretrained encoders and joint image+mask augmentation carry straight over from earlier chapters.
+\end{itemize}
+\end{keybox}
+
+\begin{practbox}
+Notebook: \nbpath{chapter\_09\_semantic\_segmentation/09\_practical\_unet\_segmentation.ipynb}.
+\begin{enumerate}[leftmargin=1.4em,nosep]
+  \item Implement \texttt{DoubleConv}, \texttt{Down}, \texttt{Up}, \texttt{OutConv}
+  and assemble a U-Net; print feature-map shapes at every stage.
+  \item Implement Dice loss and the combined CE+Dice loss.
+  \item Load LoveDA via \texttt{torchgeo}; build a segmentation \texttt{DataLoader}
+  with joint augmentation; visualise image/mask pairs.
+  \item Train for several epochs; plot loss and validation mIoU curves.
+  \item Load the best model and display RGB\,$|$\,GT\,$|$\,prediction triplets.
+\end{enumerate}
+\end{practbox}
+
+\begin{exbox}
+\textbf{9.1 No-skip ablation.} Remove the skip connections; quantify the mIoU
+drop and show the blurrier masks.\\[2pt]
+\textbf{9.2 Loss comparison.} Train with CE only, Dice only, and CE+Dice; compare
+per-class IoU, especially on rare classes.\\[2pt]
+\textbf{9.3 Depth/width.} Vary U-Net depth and base width; relate capacity to
+mIoU and memory.\\[2pt]
+\textbf{Mini-project.} Add an ImageNet-pretrained ResNet encoder to your U-Net
+(manual or via SMP, Chapter~\ref{ch:advseg}) and measure the mIoU gain over the
+from-scratch version.
+\end{exbox}
