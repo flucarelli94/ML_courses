@@ -1,0 +1,118 @@
+\chapter{Practical Infrastructure}
+\label{app:infra}
+
+This appendix collects the software, environment and hardware details needed to
+run every notebook in the course.
+
+\section{Software stack}
+
+\begin{center}\small
+\renewcommand{\arraystretch}{1.15}
+\begin{tabular}{@{}lll@{}}
+\toprule
+Layer & Library & Version\\
+\midrule
+Language & Python & 3.12\\
+Deep learning & PyTorch & $\geq$2.2\\
+Computer vision & torchvision & $\geq$0.17\\
+Segmentation & segmentation-models-pytorch & $\geq$0.3.3\\
+Metrics & torchmetrics & $\geq$1.3\\
+EO datasets & torchgeo & $\geq$0.6\\
+Raster I/O & rasterio & $\geq$1.3\\
+Raster + xarray & rioxarray & $\geq$0.15\\
+Multi-dim arrays & xarray & $\geq$2024.1\\
+Vector + CRS & geopandas & $\geq$0.14\\
+Augmentation & albumentations & $\geq$1.4\\
+Visualisation & matplotlib / seaborn & latest\\
+Interpretability & pytorch-grad-cam & $\geq$1.5\\
+Notebooks & jupyterlab & $\geq$4.1\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\section{Environment setup}
+
+\paragraph{uv (recommended).}
+\begin{lstlisting}
+curl -LsSf https://astral.sh/uv/install.sh | sh
+git clone <repo-url> CNN_projects && cd CNN_projects
+uv sync                 # installs from pyproject.toml into .venv
+uv run jupyter lab
+\end{lstlisting}
+
+\paragraph{conda or pip.}
+\begin{lstlisting}
+conda env create -f environment.yml && conda activate eo-cnn && pip install -e .
+# or
+python3.12 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt && pip install -e .
+\end{lstlisting}
+
+\paragraph{Google Colab.} Every notebook begins with a setup cell that installs
+dependencies, mounts Drive, and detects the device:
+\begin{lstlisting}
+IN_COLAB = 'google.colab' in str(get_ipython())
+if IN_COLAB:
+    !pip install -q torch torchvision torchgeo segmentation-models-pytorch \
+                    torchmetrics albumentations rasterio rioxarray geopandas grad-cam tqdm
+    from google.colab import drive; drive.mount('/content/drive')
+    DATA_ROOT = '/content/drive/MyDrive/eo_cnn_data'
+else:
+    DATA_ROOT = '../data'
+DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
+FAST_MODE = not torch.cuda.is_available()   # reduces epochs/data on CPU
+\end{lstlisting}
+
+\section{Repository structure}
+
+\begin{lstlisting}
+CNN_projects/
+|- README.md, pyproject.toml, environment.yml, requirements.txt
+|- docs/            course_design.md, infrastructure.md, capstone.md,
+|                   resources.md, textbook/ (this book)
+|- src/eo_cnn/      installable reference package
+|   |- data/        eurosat.py, sentinel2.py, transforms.py
+|   |- models/      simple_cnn.py, resnet.py, unet.py
+|   |- training/    trainer.py, metrics.py
+|   |- visualization/ plots.py
+|- notebooks/       chapter_01_.../ ... chapter_12_.../ capstone/
+|- data/            (gitignored; auto-created by torchgeo)
+\end{lstlisting}
+
+The \texttt{eo\_cnn} package is the clean reference implementation of every
+concept the notebooks teach inline: \texttt{data} (EuroSAT/Sentinel-2 loaders,
+tiling, albumentations pipelines), \texttt{models} (SimpleCNN, ResNet
+classifiers, from-scratch and SMP U-Nets), \texttt{training} (classification and
+segmentation trainers, metrics) and \texttt{visualization} (batch grids,
+prediction triplets, confusion matrices, land-cover maps). The teaching
+notebooks are deliberately self-contained for Colab; treat \texttt{eo\_cnn} as
+the polished version to read after a chapter and to build on in the capstone.
+
+\section{Hardware recommendations}
+
+\begin{center}\small
+\renewcommand{\arraystretch}{1.15}
+\begin{tabular}{@{}llll@{}}
+\toprule
+Chapters & Recommended & Minimum & Colab free\\
+\midrule
+1--4 & CPU & CPU & CPU\\
+5 & GPU 4\,GB+ & CPU (slow) & T4\\
+6--8 & GPU 6\,GB+ & GPU 4\,GB & T4\\
+9--10 & GPU 8\,GB+ & GPU 6\,GB & T4 (batch 4)\\
+11--12 & GPU 8\,GB+ & GPU 6\,GB & T4\\
+Capstone & GPU 8\,GB+ / A100 & GPU 6\,GB & Colab Pro A100\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\noindent The \texttt{FAST\_MODE} flag (auto-enabled without CUDA) reduces batch
+size, epochs and dataset fraction so every notebook completes on CPU in under an
+hour, at reduced accuracy. Dataset disk budget: EuroSAT RGB 90\,MB, EuroSAT-MS
+500\,MB, LoveDA $\sim$3\,GB (all fit Colab's free disk); a BigEarthNet subset
+should live on Google Drive.
+
+\paragraph{Platform notes.} On Windows install GDAL (e.g.\ via OSGeo4W) before
+\texttt{rasterio}; on Linux/Mac/Colab \texttt{pip install rasterio} works
+directly. \texttt{torchgeo} caches datasets on first use and loads instantly
+afterwards; all course datasets are freely accessible without registration.

@@ -1,0 +1,147 @@
+\chapter{CNN Architectures: VGG, ResNet, EfficientNet}
+\label{ch:arch}
+
+\chapmeta{Intermediate}{$\sim$4\,h (2\,h + 2\,h)}{EuroSAT}
+
+\begin{objbox}
+\begin{itemize}[leftmargin=1.2em,nosep]
+  \item Trace the evolution from LeNet/AlexNet/VGG to ResNet and EfficientNet.
+  \item Explain the degradation problem and how residual connections solve it.
+  \item Implement a ResNet basic block and reason about gradient flow.
+  \item Understand EfficientNet's compound scaling and the accuracy/efficiency frontier.
+  \item Swap backbones in a classifier and compare parameters, speed and accuracy.
+\end{itemize}
+\end{objbox}
+
+\section{A short architectural history}
+
+LeNet-5 (1998) established the \texttt{conv--pool--FC} template. AlexNet (2012)
+scaled it up with ReLU, dropout and GPU training, winning ImageNet by a wide
+margin. VGG (2014) showed that \emph{depth} built from uniform $3\times3$
+convolutions works well --- recall (Chapter~\ref{ch:conv}) that two stacked
+$3\times3$ layers match a $5\times5$ receptive field with fewer parameters and
+an extra non-linearity. But naively stacking ever more layers \emph{degraded}
+accuracy, even on the training set --- not overfitting, but an optimisation
+failure. ResNet (2015) fixed this and remains the default EO encoder.
+
+\section{The degradation problem and residual connections}
+
+A residual block learns a \emph{residual} $\mathcal{F}(\mathbf{x})$ added to its
+input via a skip (identity) connection:
+\begin{equation}
+\mathbf{y} = \mathcal{F}(\mathbf{x}; \{W_i\}) + \mathbf{x}.
+\label{eq:resid}
+\end{equation}
+If the optimal mapping for a block is close to the identity, it is far easier to
+drive $\mathcal{F}\to 0$ than to make a stack of nonlinear layers represent the
+identity exactly. Crucially, the skip provides a gradient highway: by the chain
+rule the gradient reaching $\mathbf{x}$ contains an additive ``$+1$'' term,
+\begin{equation}
+\frac{\partial \mathcal{L}}{\partial \mathbf{x}}
+= \frac{\partial \mathcal{L}}{\partial \mathbf{y}}
+\left(1 + \frac{\partial \mathcal{F}}{\partial \mathbf{x}}\right),
+\end{equation}
+so gradients cannot vanish merely from depth. This lets networks train at 50,
+101, even 152 layers. Figure~\ref{fig:resblock} shows the basic block.
+
+\begin{figure}[h]
+\centering
+\fitwidth{
+\begin{tikzpicture}[font=\small,>=Latex,node distance=8mm]
+  \tikzstyle{op}=[draw,rounded corners,minimum width=26mm,minimum height=7mm,fill=eoblue!8]
+  \node (x) {$\mathbf{x}$};
+  \node[op,right=8mm of x] (c1) {Conv $3\times3$};
+  \node[op,right=6mm of c1] (b1) {BN};
+  \node[op,right=6mm of b1] (r1) {ReLU};
+  \node[op,right=6mm of r1] (c2) {Conv $3\times3$};
+  \node[op,right=6mm of c2] (b2) {BN};
+  \node[draw,circle,right=10mm of b2,inner sep=1.5pt] (sum) {$+$};
+  \node[op,right=8mm of sum,fill=eogreen!12] (r2) {ReLU};
+  \node[right=8mm of r2] (y) {$\mathbf{y}$};
+  \draw[->] (x)--(c1); \draw[->] (c1)--(b1); \draw[->] (b1)--(r1);
+  \draw[->] (r1)--(c2); \draw[->] (c2)--(b2); \draw[->] (b2)--(sum);
+  \draw[->] (sum)--(r2); \draw[->] (r2)--(y);
+  \draw[->,eored,thick] (x.south) -- ++(0,-9mm) -| (sum.south)
+        node[pos=0.25,below,black]{identity skip $\mathbf{x}$};
+\end{tikzpicture}}
+\caption{ResNet basic block (Eq.~\ref{eq:resid}). The identity skip (red) lets
+the block default to a near-identity map and gives gradients an unobstructed
+path, enabling very deep training. A $1\times1$ ``projection'' conv replaces the
+skip when channel count or resolution changes.}
+\label{fig:resblock}
+\end{figure}
+
+Deeper ResNets replace the two-$3\times3$ block with a \emph{bottleneck}
+($1\times1\to3\times3\to1\times1$) that reduces and then restores channel
+dimension, cutting cost while keeping capacity --- the building block of
+ResNet-50/101.
+
+\section{EfficientNet and compound scaling}
+
+Networks can grow along three axes: depth (layers), width (channels) and input
+resolution. EfficientNet (2019) showed these should be scaled \emph{together} in
+fixed ratios governed by a single compound coefficient $\phi$:
+\begin{equation}
+\text{depth} \propto \alpha^{\phi},\quad
+\text{width} \propto \beta^{\phi},\quad
+\text{resolution} \propto \gamma^{\phi},\qquad
+\alpha\beta^2\gamma^2 \approx 2,
+\end{equation}
+where increasing $\phi$ by one roughly doubles compute. Built on
+mobile inverted-bottleneck (MBConv) blocks with squeeze-and-excitation,
+EfficientNet-B0$\dots$B7 trace an accuracy/efficiency frontier that beats
+ResNets at equal FLOPs --- attractive when EO inference must run cheaply at
+scale.
+
+\section{Swapping backbones}
+
+In code, changing architecture is a one-line change because \texttt{torchvision}
+and \texttt{timm} expose a uniform API:
+\begin{lstlisting}
+import torchvision.models as tv
+m18 = tv.resnet18(weights=None, num_classes=10)
+m50 = tv.resnet50(weights=None, num_classes=10)
+import timm
+eff = timm.create_model("efficientnet_b0", num_classes=10, in_chans=3)
+\end{lstlisting}
+Benchmarking on EuroSAT typically shows ResNet18 ($\sim$11\,M params) training
+fastest, ResNet50 ($\sim$25\,M) slightly more accurate, and EfficientNet-B0
+($\sim$5\,M) matching ResNet50 accuracy at a fraction of the parameters --- the
+point of compound scaling. The same encoders reappear inside segmentation
+decoders in Chapters~\ref{ch:seg}--\ref{ch:advseg}, which is exactly why we study
+them now.
+
+\begin{keybox}
+\begin{itemize}[leftmargin=1.2em,nosep]
+  \item VGG: depth from stacked $3\times3$; expensive FC head.
+  \item Degradation $\ne$ overfitting; residual skips (Eq.~\ref{eq:resid}) solve it and ease gradient flow.
+  \item Bottleneck blocks scale ResNet to 50/101/152 layers efficiently.
+  \item EfficientNet scales depth/width/resolution jointly; best accuracy per FLOP.
+  \item The classification encoder is reused as the segmentation encoder later.
+\end{itemize}
+\end{keybox}
+
+\begin{practbox}
+Notebook: \nbpath{chapter\_06\_cnn\_architectures/06\_practical\_cnn\_architectures.ipynb}.
+\begin{enumerate}[leftmargin=1.4em,nosep]
+  \item Implement a \texttt{BasicBlock} from scratch with the identity skip.
+  \item Visualise gradient magnitude per layer \emph{with} and \emph{without} the
+  skip to see the gradient highway.
+  \item Tabulate parameters, forward-pass latency and accuracy for ResNet18/50 and
+  EfficientNet-B0.
+  \item Train ResNet18 vs EfficientNet-B0 on EuroSAT for a few epochs and compare.
+\end{enumerate}
+\end{practbox}
+
+\begin{exbox}
+\textbf{6.1 Bottleneck block.} Implement the $1\times1\to3\times3\to1\times1$
+bottleneck and verify the parameter saving versus two $3\times3$ layers at equal
+channels.\\[2pt]
+\textbf{6.2 Depth ablation.} Build plain (no-skip) vs residual nets of increasing
+depth; show that only the residual ones keep improving.\\[2pt]
+\textbf{6.3 Width vs depth.} At a fixed parameter budget, compare a wider-shallow
+and a narrower-deep network on EuroSAT.\\[2pt]
+\textbf{Mini-project.} Write \texttt{build\_classifier(backbone, n\_classes)}
+supporting ResNet18/50 and EfficientNet-B0, and a benchmark harness that outputs
+a params-vs-accuracy plot.
+\end{exbox}
